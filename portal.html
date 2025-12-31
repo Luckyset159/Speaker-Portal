@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speaker Schedule</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+    :root { --primary: #1976d2; --bg: #f5f5f5; }
+    body { background-color: var(--bg); display: flex; min-height: 100vh; flex-direction: column; }
+    main { flex: 1 0 auto; padding-top: 20px; }
+    .container { max-width: 600px; }
+    .card { border-radius: 12px; }
+    .brand-logo { font-size: 1.5rem !important; margin-left: 10px; }
+    
+    /* Make Tab Titles Bold */
+    .tabs .tab a {
+        font-weight: 700 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* LOADING SPINNER */
+    .loading-overlay {
+      position: fixed; top:0; left:0; width:100%; height:100%;
+      background: rgba(255,255,255,0.8); z-index: 999;
+      display: flex; justify-content: center; align-items: center;
+      visibility: hidden; opacity: 0; transition: opacity 0.3s;
+    }
+    .loading-overlay.active { visibility: visible; opacity: 1; }
+
+    /* SCHEDULE COLORS */
+    .lang-indian { border-left: 5px solid #ff9800; background: #fff3e0; }
+    .lang-english { border-left: 5px solid #03a9f4; background: #e1f5fe; }
+    .lang-thai { border-left: 5px solid #4caf50; background: #e8f5e9; }
+    .session-card { padding: 15px; margin-bottom: 10px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+
+    /* === MOBILE OPTIMIZATIONS (V4 - Bold Tabs + Red/Green Toggles) === */
+    
+    .date-row {
+      padding: 12px 15px !important; 
+      margin: 10px 0 !important; 
+      border-radius: 8px !important;
+      display: flex !important;
+      align-items: center !important; 
+    }
+
+    .date-text {
+      font-size: 1.15rem; 
+      font-weight: 500;
+      color: #333;
+      white-space: nowrap; 
+      overflow: hidden;
+      text-overflow: ellipsis; 
+    }
+    
+    .switch label {
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+
+    .switch label .lever {
+        margin: 0 8px; 
+        transform: scale(1.1); 
+    }
+
+    /* === TOGGLE COLORS === */
+
+    /* 1. "NO" State (Unchecked) -> RED */
+    .switch label .lever {
+      background-color: #ef9a9a; /* Light Red Track */
+    }
+    .switch label .lever:after {
+      background-color: #ef5350; /* Red Knob */
+    }
+
+    /* 2. "YES" State (Checked) -> GREEN */
+    .switch label input[type=checkbox]:checked + .lever {
+      background-color: #a5d6a7; /* Light Green Track */
+    }
+    .switch label input[type=checkbox]:checked + .lever:after {
+      background-color: #4caf50; /* Green Knob */
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="blue darken-2">
+    <div class="nav-wrapper">
+      <span class="brand-logo">Speaker Portal</span>
+      <ul id="nav-mobile" class="right">
+        <li><a href="#" onclick="handleLogout()" id="nav-logout" style="display:none"><i class="material-icons">exit_to_app</i></a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div id="loader" class="loading-overlay">
+    <div class="preloader-wrapper big active">
+      <div class="spinner-layer spinner-blue-only">
+        <div class="circle-clipper left"><div class="circle"></div></div>
+        <div class="gap-patch"><div class="circle"></div></div>
+        <div class="circle-clipper right"><div class="circle"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <div class="container">
+
+      <div id="login-card" class="card">
+        <div class="card-content">
+          <span class="card-title center-align">Welcome</span>
+          <div class="input-field">
+            <select id="name-select" class="browser-default">
+              <option value="" disabled selected>Loading speakers...</option>
+            </select>
+          </div>
+          <div class="input-field">
+            <input id="password" type="password">
+            <label for="password">Password</label>
+          </div>
+          <button class="btn-large waves-effect waves-light blue darken-2" style="width:100%" onclick="login()">
+            Log In <i class="material-icons right">send</i>
+          </button>
+        </div>
+      </div>
+
+      <div id="dashboard" style="display:none">
+        
+        <div class="card">
+          <div class="card-tabs">
+            <ul class="tabs tabs-fixed-width">
+              <li class="tab"><a class="active" href="#tab-availability">Availability</a></li>
+              <li class="tab"><a href="#tab-schedule" onclick="loadSchedule()">My Schedule</a></li>
+            </ul>
+          </div>
+          
+          <div class="card-content grey lighten-5">
+            
+            <div id="tab-availability">
+              <div class="row valign-wrapper" style="margin-bottom: 20px;">
+                <div class="col s12">
+                  <label>Filter by Month</label>
+                  <select id="month-filter" class="browser-default" onchange="filterDates()">
+                    <option value="all">Show All</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div id="availability-list"></div>
+
+              <div class="fixed-action-btn">
+                <button class="btn-floating btn-large green waves-effect waves-light" onclick="submitAvailability()">
+                  <i class="material-icons">save</i>
+                </button>
+              </div>
+            </div>
+
+            <div id="tab-schedule">
+              <div id="schedule-list">
+                <p class="center-align grey-text">Tap "My Schedule" to load data.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script>
+    // ========================================================
+    // ⚠️ PASTE YOUR GOOGLE APPS SCRIPT URL HERE
+    // ========================================================
+    const API_URL = "https://script.google.com/macros/s/AKfycbyuipZBnMWjLIVy1wvNkKrs38sMNm8T5EOy9r3X6pDakPbed5qjvVJGX9rI_G6KPWQB/exec"; 
+    // ========================================================
+
+    let state = {
+      names: [],
+      dates: [],
+      userRow: null,
+      userName: null,
+      availability: []
+    };
+
+    // --- INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', function() {
+      M.AutoInit(); // Init Materialize components
+      fetchInitialData();
+    });
+
+    function showLoader(show) {
+      document.getElementById('loader').classList.toggle('active', show);
+    }
+
+    // --- API CALLS ---
+
+    // 1. Get Names and Dates
+    async function fetchInitialData() {
+      showLoader(true);
+      try {
+        // We use GET for reading initial data
+        const res = await fetch(`${API_URL}?action=getData`);
+        const data = await res.json();
+        
+        if (data.error) throw new Error(data.error);
+        
+        state.names = data.names;
+        state.dates = data.dateHeaders;
+        populateNameSelect();
+      } catch (e) {
+        M.toast({html: 'Error loading data: ' + e.message, classes: 'red'});
+      } finally {
+        showLoader(false);
+      }
+    }
+
+    // 2. Login
+    async function login() {
+      const name = document.getElementById('name-select').value;
+      const pass = document.getElementById('password').value;
+      if(!name || !pass) return M.toast({html: 'Please fill all fields'});
+
+      showLoader(true);
+      try {
+        const res = await postData({ action: 'login', name: name, password: pass });
+        
+        if (res.success) {
+          state.userRow = res.rowIndex;
+          state.userName = name;
+          state.availability = res.availability;
+          
+          document.getElementById('login-card').style.display = 'none';
+          document.getElementById('dashboard').style.display = 'block';
+          document.getElementById('nav-logout').style.display = 'block';
+          
+          renderAvailability();
+        } else {
+          M.toast({html: res.message, classes: 'red'});
+        }
+      } catch(e) {
+        M.toast({html: 'Login failed', classes: 'red'});
+      } finally {
+        showLoader(false);
+      }
+    }
+
+    // 3. Update Availability
+    async function submitAvailability() {
+      showLoader(true);
+      try {
+        // Collect current state of switches
+        const updates = state.dates.map((_, index) => {
+          const checkbox = document.getElementById(`date-check-${index}`);
+          return checkbox.checked ? 'YES' : 'NO';
+        });
+
+        const res = await postData({ 
+          action: 'updateAvailability', 
+          rowIndex: state.userRow, 
+          updates: updates 
+        });
+
+        if(res.success) {
+          M.toast({html: 'Saved successfully!', classes: 'green rounded'});
+        } else {
+          M.toast({html: 'Save failed: ' + res.message, classes: 'red'});
+        }
+      } catch(e) {
+        M.toast({html: 'Connection error', classes: 'red'});
+      } finally {
+        showLoader(false);
+      }
+    }
+
+    // 4. Get Schedule
+    async function loadSchedule() {
+      const list = document.getElementById('schedule-list');
+      list.innerHTML = '<div class="center-align">Loading...</div>';
+      
+      try {
+        const res = await postData({ action: 'getSchedule', name: state.userName });
+        list.innerHTML = '';
+        
+        if(!res.sessions || res.sessions.length === 0) {
+          list.innerHTML = '<div class="center-align grey-text">No scheduled sessions found.</div>';
+          return;
+        }
+
+        res.sessions.forEach(s => {
+          // Determine color class
+          let langClass = '';
+          const l = (s.language || '').toLowerCase();
+          if(l.includes('india')) langClass = 'lang-indian';
+          else if(l.includes('thai')) langClass = 'lang-thai';
+          else if(l.includes('english')) langClass = 'lang-english';
+
+          const dateObj = new Date(s.date);
+          const dateStr = !isNaN(dateObj) ? dateObj.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'}) : s.date;
+          const timeStr = s.time instanceof String ? s.time : new Date(s.time).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+
+          const html = `
+            <div class="session-card ${langClass}">
+              <div class="session-date">${dateStr} &bull; ${timeStr}</div>
+              <div class="session-meta">
+                Language: <b>${s.language}</b><br>
+                Speaker: ${s.speaker}
+              </div>
+            </div>
+          `;
+          list.innerHTML += html;
+        });
+
+      } catch(e) {
+        list.innerHTML = '<div class="center-align red-text">Error loading schedule</div>';
+      }
+    }
+
+    // --- HELPER FUNCTIONS ---
+
+    // POST Helper (Crucial for Apps Script CORS)
+    async function postData(dataObj) {
+      // We send data as a stringified BODY, but we do NOT set Content-Type to JSON.
+      // This prevents the browser from sending a pre-flight OPTIONS request which Apps Script hates.
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify(dataObj)
+      });
+      return await response.json();
+    }
+
+    function populateNameSelect() {
+      const sel = document.getElementById('name-select');
+      sel.innerHTML = '<option value="" disabled selected>Select your name</option>';
+      state.names.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        opt.innerText = n;
+        sel.appendChild(opt);
+      });
+    }
+
+    function renderAvailability() {
+      const container = document.getElementById('availability-list');
+      const monthFilter = document.getElementById('month-filter');
+      container.innerHTML = '';
+      
+      const months = new Set();
+
+      state.dates.forEach((dateStr, index) => {
+        // Parse date for grouping
+        const d = new Date(dateStr);
+        const monthKey = isNaN(d) ? 'Others' : d.toLocaleDateString('en-US', {month:'long', year:'numeric'});
+        months.add(monthKey);
+
+        const isChecked = state.availability[index] === 'YES';
+
+        const item = document.createElement('div');
+        item.className = 'card-panel valign-wrapper date-row';
+        item.style.padding = '10px';
+        item.style.margin = '5px 0';
+        item.dataset.month = monthKey; // For filtering
+
+        // Format Date Display
+        const dateDisplay = isNaN(d) ? dateStr : d.toLocaleDateString('en-GB', {weekday:'short', day:'2-digit', month:'short'});
+
+        // ... inside renderAvailability() loop ...
+
+        item.innerHTML = `
+          <div class="date-text" style="flex-grow:1;">${dateDisplay}</div>
+          <div class="switch">
+            <label>
+              NO
+              <input type="checkbox" id="date-check-${index}" ${isChecked ? 'checked' : ''}>
+              <span class="lever"></span>
+              YES
+            </label>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+
+      // Populate Filter
+      monthFilter.innerHTML = '<option value="all">Show All Dates</option>';
+      months.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.innerText = m;
+        monthFilter.appendChild(opt);
+      });
+    }
+
+    function filterDates() {
+      const val = document.getElementById('month-filter').value;
+      const rows = document.querySelectorAll('.date-row');
+      rows.forEach(r => {
+        if(val === 'all' || r.dataset.month === val) r.style.display = 'flex';
+        else r.style.display = 'none';
+      });
+    }
+
+    function handleLogout() {
+      location.reload();
+    }
+  </script>
+</body>
+</html>
