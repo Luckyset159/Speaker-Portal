@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Public Schedule</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    :root { --bg: #f5f5f5; }
+    body { background-color: var(--bg); display: flex; min-height: 100vh; flex-direction: column; }
+    .container { max-width: 600px; margin-top: 20px; }
+    
+    /* Filter Buttons */
+    .filter-btn-group { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+    .filter-btn-group .btn { border-radius: 20px; flex: 1; text-transform: capitalize; font-weight: bold; }
+    
+    /* Active Button Colors */
+    .btn-flat { background-color: #e0e0e0; color: #666; }
+    .btn-active { background-color: #1976d2 !important; color: white !important; }
+
+    /* Card Styling */
+    .lang-indian { border-left: 5px solid #ff9800; background: #fff3e0; }
+    .lang-english { border-left: 5px solid #03a9f4; background: #e1f5fe; }
+    .lang-thai { border-left: 5px solid #4caf50; background: #e8f5e9; }
+    
+    .session-card { 
+      padding: 15px; 
+      margin-bottom: 12px; 
+      border-radius: 8px; 
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+      background: white;
+    }
+    .session-date { font-weight: bold; font-size: 1.1rem; color: #333; }
+    .session-meta { font-size: 0.95rem; color: #555; margin-top: 6px; line-height: 1.4em; }
+    
+    .loading-text { text-align: center; color: #888; margin-top: 40px; }
+  </style>
+</head>
+<body>
+
+  <nav class="blue darken-3">
+    <div class="nav-wrapper container" style="margin-top:0">
+      <span class="brand-logo center" style="font-size: 1.3rem;">Upcoming Schedule</span>
+    </div>
+  </nav>
+
+  <div class="container">
+    
+    <div class="filter-btn-group">
+      <button class="btn btn-flat waves-effect" id="btn-wed" onclick="filterList('Wednesday')">Wednesdays</button>
+      <button class="btn btn-flat waves-effect" id="btn-sun" onclick="filterList('Sunday')">Sundays</button>
+      <button class="btn btn-active waves-effect" id="btn-all" onclick="filterList('All')">All</button>
+    </div>
+
+    <div id="schedule-list">
+      <div class="loading-text">
+        <div class="preloader-wrapper small active">
+          <div class="spinner-layer spinner-blue-only">
+            <div class="circle-clipper left"><div class="circle"></div></div>
+          </div>
+        </div>
+        <p>Loading next 3 months...</p>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script>
+    // ========================================================
+    // ⚠️ PASTE YOUR GOOGLE APPS SCRIPT URL HERE
+    // ========================================================
+    const API_URL = "https://script.google.com/macros/s/AKfycbyuipZBnMWjLIVy1wvNkKrs38sMNm8T5EOy9r3X6pDakPbed5qjvVJGX9rI_G6KPWQB/exec"; 
+    // ========================================================
+
+    let allSessions = []; 
+
+    document.addEventListener('DOMContentLoaded', fetchSchedule);
+
+    async function fetchSchedule() {
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'getFullSchedule' })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          allSessions = data.sessions;
+          renderList(allSessions); 
+        } else {
+          document.getElementById('schedule-list').innerHTML = `<p class="center-align red-text">${data.message}</p>`;
+        }
+      } catch (error) {
+        document.getElementById('schedule-list').innerHTML = `<p class="center-align red-text">Connection failed.</p>`;
+      }
+    }
+
+    function renderList(sessions) {
+      const container = document.getElementById('schedule-list');
+      container.innerHTML = '';
+
+      if (sessions.length === 0) {
+        container.innerHTML = '<p class="center-align grey-text">No sessions found for this selection.</p>';
+        return;
+      }
+
+      sessions.forEach(s => {
+        let langClass = '';
+        const l = (s.language || '').toLowerCase();
+        if(l.includes('india')) langClass = 'lang-indian';
+        else if(l.includes('thai')) langClass = 'lang-thai';
+        else if(l.includes('english')) langClass = 'lang-english';
+
+        // === 1. DATE FIX (Add Weekday + dd/mm/yyyy) ===
+        const dateObj = new Date(s.date);
+        const dateStr = dateObj.toLocaleDateString('en-GB', {
+          weekday: 'short', // Adds "Wed" or "Sun"
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric'
+        });
+        
+        // === 2. TIME FIX (Clean up 1899) ===
+        let timeStr = s.time;
+        // Check if it's the raw Google Sheet date string (contains 1899 or T)
+        if (timeStr && (String(timeStr).includes('1899') || String(timeStr).includes('T'))) {
+             const tObj = new Date(timeStr);
+             if (!isNaN(tObj)) {
+               // Extract just the time (e.g., 10:30)
+               timeStr = tObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+             }
+        }
+
+        const html = `
+          <div class="session-card ${langClass}">
+            <div class="session-date">${dateStr} &bull; ${timeStr}</div>
+            <div class="session-meta">
+              Language: <b>${s.language}</b><br>
+              Speaker: <b>${s.speaker}</b>
+            </div>
+          </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+      });
+    }
+
+    function filterList(filterDay) {
+      document.querySelectorAll('.filter-btn-group button').forEach(b => {
+        b.classList.remove('btn-active');
+        b.classList.add('btn-flat');
+      });
+      
+      let activeBtnId = 'btn-all';
+      if(filterDay === 'Wednesday') activeBtnId = 'btn-wed';
+      if(filterDay === 'Sunday') activeBtnId = 'btn-sun';
+      
+      const activeBtn = document.getElementById(activeBtnId);
+      activeBtn.classList.remove('btn-flat');
+      activeBtn.classList.add('btn-active');
+
+      if (filterDay === 'All') {
+        renderList(allSessions);
+      } else {
+        const filtered = allSessions.filter(s => {
+           const dayName = new Date(s.date).toLocaleDateString('en-US', {weekday: 'long'});
+           return dayName.includes(filterDay);
+        });
+        renderList(filtered);
+      }
+    }
+  </script>
+</body>
+</html>
