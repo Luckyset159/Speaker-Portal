@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speaker Schedule</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    :root { --primary: #1976d2; --bg: #f5f5f5; }
+    body { background-color: var(--bg); display: flex; min-height: 100vh; flex-direction: column; }
+    main { flex: 1 0 auto; padding-top: 20px; padding-bottom: 80px; }
+    .container { max-width: 600px; }
+    .card { border-radius: 12px; }
+    .brand-logo { font-size: 1.5rem !important; margin-left: 10px; }
+    
+    .tabs .tab a { font-weight: 700 !important; text-transform: uppercase; letter-spacing: 0.5px; }
+    
+    .loading-overlay {
+      position: fixed; top:0; left:0; width:100%; height:100%;
+      background: rgba(255,255,255,0.8); z-index: 999;
+      display: flex; justify-content: center; align-items: center;
+      visibility: hidden; opacity: 0; transition: opacity 0.3s;
+    }
+    .loading-overlay.active { visibility: visible; opacity: 1; }
+
+    /* Schedule Colors */
+    .lang-indian { border-left: 5px solid #ff9800; background: #fff3e0; }
+    .lang-english { border-left: 5px solid #03a9f4; background: #e1f5fe; }
+    .lang-thai { border-left: 5px solid #4caf50; background: #e8f5e9; }
+    .session-card { padding: 15px; margin-bottom: 10px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+
+    /* === MOBILE OPTIMIZATIONS === */
+    .date-row {
+      padding: 12px 15px !important; 
+      margin: 10px 0 !important; 
+      border-radius: 8px !important;
+      display: flex; 
+      align-items: center !important; 
+    }
+    .date-text {
+      font-size: 1.15rem; font-weight: 500; color: #333;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+    }
+    .switch label { font-size: 0.8rem; font-weight: bold; }
+    .switch label .lever { margin: 0 8px; transform: scale(1.1); }
+    
+    /* Toggle Colors */
+    .switch label .lever { background-color: #ef9a9a; } 
+    .switch label .lever:after { background-color: #ef5350; }
+    .switch label input[type=checkbox]:checked + .lever { background-color: #a5d6a7; } 
+    .switch label input[type=checkbox]:checked + .lever:after { background-color: #4caf50; }
+
+    /* === BUTTONS === */
+    .exit-btn {
+      font-size: 0.85rem; font-weight: bold; text-transform: uppercase;
+      padding: 0 15px; line-height: 64px; display: inline-block; cursor: pointer;
+    }
+
+    .bottom-fixed-container {
+      position: fixed; bottom: 20px; right: 20px; z-index: 100;
+    }
+    .btn-submit {
+      border-radius: 50px; padding: 0 25px; font-size: 0.85rem; font-weight: bold;
+      letter-spacing: 1px; height: 45px; line-height: 45px;
+      background-color: #2e7d32 !important; 
+      display: flex; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    .btn-submit i { font-size: 1.2rem; margin-right: 8px; }
+
+  </style>
+</head>
+<body>
+
+  <nav class="blue darken-2">
+    <div class="nav-wrapper">
+      <span class="brand-logo">Speaker Portal</span>
+      <ul id="nav-mobile" class="right">
+        <li>
+          <a href="#" onclick="handleLogout()" id="nav-logout" style="display:none">
+            <span class="exit-btn">EXIT</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <div id="loader" class="loading-overlay">
+    <div class="preloader-wrapper big active">
+      <div class="spinner-layer spinner-blue-only">
+        <div class="circle-clipper left"><div class="circle"></div></div>
+        <div class="gap-patch"><div class="circle"></div></div>
+        <div class="circle-clipper right"><div class="circle"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <div class="container">
+
+      <div id="login-card" class="card">
+        <div class="card-content">
+          <span class="card-title center-align">Welcome</span>
+          <div class="input-field">
+            <select id="name-select" class="browser-default">
+              <option value="" disabled selected>Loading speakers...</option>
+            </select>
+          </div>
+          <div class="input-field">
+            <input id="password" type="password">
+            <label for="password">Password</label>
+          </div>
+          <button class="btn-large waves-effect waves-light blue darken-2" style="width:100%" onclick="login()">
+            Log In <i class="material-icons right">send</i>
+          </button>
+        </div>
+      </div>
+
+      <div id="dashboard" style="display:none">
+        
+        <div class="card">
+          <div class="card-tabs">
+            <ul class="tabs tabs-fixed-width">
+              <li class="tab"><a class="active" id="tab-avail-link" href="#tab-availability">Availability</a></li>
+              <li class="tab"><a href="#tab-schedule" onclick="loadSchedule()">My Schedule</a></li>
+            </ul>
+          </div>
+          
+          <div class="card-content grey lighten-5">
+            
+            <div id="tab-availability">
+              <div class="row valign-wrapper" style="margin-bottom: 20px;">
+                <div class="col s12">
+                  <label>Filter by Month</label>
+                  <select id="month-filter" class="browser-default" onchange="filterDates()">
+                    <option value="all">Show All</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div id="availability-list"></div>
+
+              <div class="bottom-fixed-container">
+                <button class="btn waves-effect waves-light btn-submit" onclick="submitAvailability()">
+                  <i class="material-icons">save</i> SAVE
+                </button>
+              </div>
+            </div>
+
+            <div id="tab-schedule">
+              <div id="schedule-list">
+                <p class="center-align grey-text">Tap "My Schedule" to load data.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script>
+    // ========================================================
+    // ⚠️ PASTE YOUR GOOGLE APPS SCRIPT URL HERE
+    // ========================================================
+    const API_URL = "https://script.google.com/macros/s/AKfycbyuipZBnMWjLIVy1wvNkKrs38sMNm8T5EOy9r3X6pDakPbed5qjvVJGX9rI_G6KPWQB/exec"; 
+    // ========================================================
+
+    let state = {
+      names: [],
+      dates: [],
+      userRow: null,
+      userName: null,
+      availability: []
+    };
+
+    // Helper: Formatter for Bangkok Time
+    const bangkokDate = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Bangkok',
+      day: '2-digit', month: 'short', weekday: 'short'
+    });
+    
+    const bangkokTime = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Bangkok',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+      M.AutoInit(); 
+      fetchInitialData();
+    });
+
+    function showLoader(show) {
+      document.getElementById('loader').classList.toggle('active', show);
+    }
+
+    // --- API CALLS ---
+    async function fetchInitialData() {
+      showLoader(true);
+      try {
+        const res = await fetch(`${API_URL}?action=getData`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        state.names = data.names;
+        state.dates = data.dateHeaders;
+        populateNameSelect();
+      } catch (e) {
+        M.toast({html: 'Error loading data: ' + e.message, classes: 'red'});
+      } finally {
+        showLoader(false);
+      }
+    }
+
+    async function login() {
+      const name = document.getElementById('name-select').value;
+      const pass = document.getElementById('password').value;
+      if(!name || !pass) return M.toast({html: 'Please fill all fields'});
+
+      showLoader(true);
+      try {
+        const res = await postData({ action: 'login', name: name, password: pass });
+        if (res.success) {
+          state.userRow = res.rowIndex;
+          state.userName = name;
+          state.availability = res.availability;
+          
+          // --- CHANGE TAB TITLE WITH NAME ---
+          // Extract first name to keep it short
+          const firstName = name.split(' ')[0]; 
+          const tabLink = document.getElementById('tab-avail-link');
+          if(tabLink) {
+             tabLink.textContent = `${firstName}'s Availability`;
+          }
+          // ----------------------------------
+
+          document.getElementById('login-card').style.display = 'none';
+          document.getElementById('dashboard').style.display = 'block';
+          document.getElementById('nav-logout').style.display = 'block';
+          renderAvailability();
+        } else {
+          M.toast({html: res.message, classes: 'red'});
+        }
+      } catch(e) {
+        M.toast({html: 'Login failed', classes: 'red'});
+      } finally {
+        showLoader(false);
+      }
+    }
+
+    async function submitAvailability() {
+      showLoader(true);
+      try {
+        const updates = state.dates.map((_, index) => {
+          const checkbox = document.getElementById(`date-check-${index}`);
+          return checkbox.checked ? 'YES' : 'NO';
+        });
+
+        const res = await postData({ 
+          action: 'updateAvailability', 
+          rowIndex: state.userRow, 
+          updates: updates 
+        });
+
+        if(res.success) {
+          M.toast({html: 'Saved successfully!', classes: 'green rounded'});
+        } else {
+          M.toast({html: 'Save failed: ' + res.message, classes: 'red'});
+        }
+      } catch(e) {
+        M.toast({html: 'Connection error', classes: 'red'});
+      } finally {
+        showLoader(false);
+      }
+    }
+
+    async function loadSchedule() {
+      const list = document.getElementById('schedule-list');
+      list.innerHTML = '<div class="center-align">Loading...</div>';
+      
+      try {
+        const res = await postData({ action: 'getSchedule', name: state.userName });
+        list.innerHTML = '';
+        
+        if(!res.sessions || res.sessions.length === 0) {
+          list.innerHTML = '<div class="center-align grey-text">No scheduled sessions found.</div>';
+          return;
+        }
+
+        // Get Today's date at midnight to filter past events
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let hasFutureSessions = false;
+
+        res.sessions.forEach(s => {
+          // Check if date is in the past
+          const sDate = new Date(s.date);
+          if (sDate < today) return; // SKIP past dates
+
+          hasFutureSessions = true;
+
+          let langClass = '';
+          const l = (s.language || '').toLowerCase();
+          if(l.includes('india')) langClass = 'lang-indian';
+          else if(l.includes('thai')) langClass = 'lang-thai';
+          else if(l.includes('english')) langClass = 'lang-english';
+
+          // --- TIMEZONE FIX ---
+          const dObj = new Date(s.date);
+          const tObj = new Date(s.time);
+          
+          let dateStr = s.date;
+          if(!isNaN(dObj)) dateStr = bangkokDate.format(dObj);
+
+          let timeStr = s.time;
+          if(!isNaN(tObj)) timeStr = bangkokTime.format(tObj);
+          
+          if (String(s.time).includes('1899')) {
+             timeStr = tObj.toLocaleTimeString('en-GB', { 
+               timeZone: 'Asia/Bangkok', 
+               hour: '2-digit', minute: '2-digit', hour12: false 
+             });
+          }
+
+          const html = `
+            <div class="session-card ${langClass}">
+              <div class="session-date">${dateStr} &bull; ${timeStr}</div>
+              <div class="session-meta">
+                Language: <b>${s.language}</b><br>
+                Speaker: ${s.speaker}
+              </div>
+            </div>
+          `;
+          list.innerHTML += html;
+        });
+
+        if (!hasFutureSessions) {
+            list.innerHTML = '<div class="center-align grey-text">No upcoming sessions.</div>';
+        }
+
+      } catch(e) {
+        list.innerHTML = '<div class="center-align red-text">Error loading schedule</div>';
+      }
+    }
+
+    async function postData(dataObj) {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify(dataObj)
+      });
+      return await response.json();
+    }
+
+    function populateNameSelect() {
+      const sel = document.getElementById('name-select');
+      sel.innerHTML = '<option value="" disabled selected>Select your name</option>';
+      state.names.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        opt.innerText = n;
+        sel.appendChild(opt);
+      });
+    }
+
+    function parseDate(input) {
+      let d = new Date(input);
+      if (!isNaN(d.getTime())) return d;
+      if (typeof input === 'string') {
+        const parts = input.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+        if (parts) return new Date(`${parts[2]}/${parts[1]}/${parts[3]}`);
+      }
+      return null;
+    }
+
+    function renderAvailability() {
+      const container = document.getElementById('availability-list');
+      const monthFilter = document.getElementById('month-filter');
+      container.innerHTML = '';
+      
+      const months = new Map(); 
+
+      state.dates.forEach((dateStr, index) => {
+        const d = parseDate(dateStr);
+        let monthKey = "Others";
+        
+        if (d) {
+           monthKey = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+           if(!months.has(monthKey)) months.set(monthKey, monthKey);
+        }
+
+        const isChecked = state.availability[index] === 'YES';
+        const item = document.createElement('div');
+        item.className = 'card-panel date-row';
+        item.dataset.month = monthKey; 
+
+        const dateDisplay = d ? bangkokDate.format(d) : dateStr;
+
+        item.innerHTML = `
+          <div class="date-text" style="flex-grow:1;">${dateDisplay}</div>
+          <div class="switch">
+            <label>
+              NO
+              <input type="checkbox" id="date-check-${index}" ${isChecked ? 'checked' : ''}>
+              <span class="lever"></span>
+              YES
+            </label>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+
+      monthFilter.innerHTML = '<option value="all">Show All Dates</option>';
+      months.forEach((displayValue, key) => {
+        const opt = document.createElement('option');
+        opt.value = key; 
+        opt.innerText = displayValue;
+        monthFilter.appendChild(opt);
+      });
+    }
+
+    function filterDates() {
+      const val = document.getElementById('month-filter').value;
+      const rows = document.querySelectorAll('.date-row');
+      rows.forEach(r => {
+        if(val === 'all' || r.dataset.month === val) {
+          r.style.display = 'flex'; 
+        } else {
+          r.style.display = 'none';
+        }
+      });
+    }
+
+    function handleLogout() {
+      location.reload();
+    }
+  </script>
+</body>
+</html>
